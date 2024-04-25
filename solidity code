@@ -310,13 +310,6 @@ contract ReputationRegistry{
     }
     
     
-    function addMaintenanceTeam(address s) public {
-        require(stakeholderRegistration.isBuildingOwnerRegistered(msg.sender) || stakeholderRegistration.isFacilityManagerRegistered(msg.sender) || stakeholderRegistration.isInsuranceCompanyRegistered(msg.sender), 
-        "Only building owner, facility manager and insurance company can evaluate the maintenance team");
-        require( MaintenanceTeamRep[s]==0, "Maintenance Team already added");
-        MaintenanceTeamRep[s]=80;
-    }
-    
     function evaluatorFeedback (address _maintenanceTeam, bool transactionSuccessful) public {
         require(stakeholderRegistration.isBuildingOwnerRegistered(msg.sender) || stakeholderRegistration.isFacilityManagerRegistered(msg.sender) || stakeholderRegistration.isInsuranceCompanyRegistered(msg.sender), 
         "Only building owner, facility manager and insurance company can evaluate the maintenance team");
@@ -328,6 +321,8 @@ contract ReputationRegistry{
         );
         EvaluatorFeedback[msg.sender]._evaluator[_maintenanceTeam]=true;
         EvaluatorFeedback[msg.sender].status[_maintenanceTeam]= transactionSuccessful;
+        require( MaintenanceTeamRep[_maintenanceTeam]==0, "Maintenance Team already added");
+        MaintenanceTeamRep[_maintenanceTeam]=80;
         
     }
     
