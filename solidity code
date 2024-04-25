@@ -1,0 +1,356 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract StakeholderRegistrationContract {
+    address regulatoryAuthority;
+    mapping(address => bool) authorized;
+    mapping(address=>bool) isBuildingOwner;
+    mapping(address=>bool) isConstructionCompany;
+    mapping(address=>bool) isFacilityManager;
+    mapping(address=>bool) isMaintenanceTeam;
+    mapping(address=>bool) isInsuranceCompany;
+    
+
+    // Event to notify when a stakeholder is registered
+    event StakeholderRegistered(address stakeholderAddress, string stakeholderType);
+
+    // Constructor to set regulatory authority
+    constructor() {
+        regulatoryAuthority = msg.sender;
+        authorized[regulatoryAuthority] = true;
+    }
+
+    // Modifier to check if the sender is authorized
+    modifier onlyAuthorized() {
+        require(authorized[msg.sender], "Unauthorized");
+        _;
+    }
+
+    // Function to register a stakeholder
+    function addStakeholder(address stakeholderAddress, string memory stakeholderType) internal {
+        require(!isBuildingOwner[stakeholderAddress], "Building Owner cannot be registered as a stakeholder");
+        require(!isConstructionCompany[stakeholderAddress], "Construction Company cannot be registered as a stakeholder");
+        require(!isFacilityManager[stakeholderAddress], "Facility Manager cannot be registered as a stakeholder");
+        require(!isMaintenanceTeam[stakeholderAddress], "Maintenance Team cannot be registered as a stakeholder");
+        require(!isInsuranceCompany[stakeholderAddress], "Insurance Comapany cannot be registered as a stakeholder");
+    
+        if (keccak256(abi.encodePacked(stakeholderType)) == keccak256(abi.encodePacked("BuildingOwner"))) {
+            isBuildingOwner[stakeholderAddress] = true;
+        } else if (keccak256(abi.encodePacked(stakeholderType)) == keccak256(abi.encodePacked("ConstructionCompany"))) {
+            isConstructionCompany[stakeholderAddress] = true;
+        } else if (keccak256(abi.encodePacked(stakeholderType)) == keccak256(abi.encodePacked("FacilityManager"))) {
+            isFacilityManager[stakeholderAddress] = true;
+        } else if (keccak256(abi.encodePacked(stakeholderType)) == keccak256(abi.encodePacked("MaintenanceTeam"))) {
+            isMaintenanceTeam[stakeholderAddress] = true;
+        } else if (keccak256(abi.encodePacked(stakeholderType)) == keccak256(abi.encodePacked("InsuranceCompany"))) {
+            isInsuranceCompany[stakeholderAddress] = true;
+        } else {
+            revert("Invalid stakeholder type");
+        }
+
+        authorized[stakeholderAddress] = true;
+        emit StakeholderRegistered(stakeholderAddress, stakeholderType);
+    }
+
+    
+    function registerStakeholder(address stakeholderAddress, string memory stakeholderType) public onlyAuthorized {
+        require(!authorized[stakeholderAddress], "Stakeholder already registered");
+        
+        addStakeholder(stakeholderAddress, stakeholderType);
+        authorized[stakeholderAddress] = true;
+    }
+
+    function isBuildingOwnerRegistered(address x) public view returns (bool){
+        return isBuildingOwner[x];
+    }
+    
+    function isConstructionCompanyRegistered(address x) public view returns (bool){
+        return isConstructionCompany[x];
+    }
+
+    function isFacilityManagerRegistered(address x) public view returns (bool){
+        return isFacilityManager[x];
+    }
+
+    function isMaintenanceTeamRegistered(address x) public view returns (bool){
+        return isMaintenanceTeam[x];
+    }
+
+    function isInsuranceCompanyRegistered(address x) public view returns (bool){
+        return isInsuranceCompany[x];
+    }
+}
+
+
+contract BuildingDataRegistry {
+    address owner;
+    StakeholderRegistrationContract stakeholderRegistration;
+    
+
+    struct InitialBuildingData {
+        bool exists;
+        address buildingAddress;
+        string specification;
+        uint maintenancePeriod; // Represented in seconds
+        bytes32 initialIpfsHash;
+        string insuranceNumber;
+    }
+
+    struct PeriodicBuildingData {
+        address buildingAddress;
+        uint maintenanceTimestamp; // Represented in seconds
+        bytes32 updatedDataHash;
+    }
+
+    mapping(address => InitialBuildingData) buildingDataRegistry;
+    mapping(address => PeriodicBuildingData) UpdatedbuildingDataRegistry;
+
+    event InitialBuildingDataUploaded(address buildingAddress, string specifications, uint maintenancePeriod, bytes32 initialIpfsHash, string insuranceNumber);
+    event PeriodicBuildingDataUploaded(address buildingAddress, uint maintenanceTimestamp, bytes32 updatedDataHash);
+
+
+    constructor(address _stakeholderRegistration) {
+        owner = msg.sender;
+        stakeholderRegistration = StakeholderRegistrationContract(_stakeholderRegistration);
+    }
+
+    
+    function uploadInitialBuildingData(
+        address buildingAddress,
+        string memory specification,
+        uint maintenancePeriod, 
+        bytes32 initialIpfsHash,
+        string memory insuranceNumber
+    ) public {
+        require(stakeholderRegistration.isConstructionCompanyRegistered(msg.sender), "Unauthorized");        
+    
+       // Check if the building data is not already uploaded
+        require(buildingDataRegistry[buildingAddress].buildingAddress != buildingAddress, "Building data already registered");
+
+        // Upload the initial building data
+            buildingDataRegistry[buildingAddress] = InitialBuildingData(true, buildingAddress, specification, maintenancePeriod, initialIpfsHash, insuranceNumber);    
+        emit InitialBuildingDataUploaded(buildingAddress, specification, maintenancePeriod, initialIpfsHash, insuranceNumber);
+    }
+
+
+    function isBuildingRegistered(address _buildingAddress) public view returns (bool){
+        return buildingDataRegistry[_buildingAddress].exists;
+    }
+
+    
+
+   function updatePeriodicBuildingData(
+        address buildingAddress,
+        uint256 maintenanceTimestamp,
+        bytes32 updatedDataHash
+    ) public {
+
+        require(stakeholderRegistration.isBuildingOwnerRegistered(msg.sender) || stakeholderRegistration.isFacilityManagerRegistered(msg.sender), "Unauthorized");
+
+        // Check if the building has initial data registered
+        require(isBuildingRegistered(buildingAddress), "Building data not found");
+
+        // Upload periodic building data
+        UpdatedbuildingDataRegistry[buildingAddress] = PeriodicBuildingData (buildingAddress, maintenanceTimestamp, updatedDataHash);    
+        emit PeriodicBuildingDataUploaded (buildingAddress, maintenanceTimestamp, updatedDataHash);
+    }
+
+}
+
+contract MaintenanceAgreement {
+    address owner;
+    StakeholderRegistrationContract stakeholderRegistration;
+    BuildingDataRegistry buildingDataRegistry;
+
+    enum TaskStatus { InProgress, Completed }
+
+    struct MaintenanceTask {
+        uint taskId;
+        address buildingAddress;
+        string taskDescription;
+        address maintenanceTeam; // Add maintenance team member
+       TaskStatus status;
+    }
+    
+    
+    mapping(uint => MaintenanceTask) maintenanceTasks;
+    uint nextTaskId;
+    
+    event MaintenanceTaskAssigned(address indexed facilityManager, address indexed buildingAddress, uint indexed taskId, string taskDescription, address maintenanceTeam);
+    event TaskCompleted(uint256 indexed taskId, address indexed maintenanceTeam);
+ 
+    constructor(address _stakeholderRegistration, address _buildingDataRegistryAddress) {
+        owner = msg.sender;
+        stakeholderRegistration = StakeholderRegistrationContract(_stakeholderRegistration);
+        buildingDataRegistry = BuildingDataRegistry(_buildingDataRegistryAddress);
+        nextTaskId = 1;
+    }
+
+   // Modifier to restrict access to registered maintenance teams
+    modifier onlyMaintenanceTeam() {
+        require(stakeholderRegistration.isMaintenanceTeamRegistered(msg.sender), "Only maintenance team can call this function");
+        _;
+    }
+
+    // Modifier to restrict access to registered facility managers
+    modifier onlyFacilityManager() {
+        require(stakeholderRegistration.isFacilityManagerRegistered(msg.sender), "Only facility manager can call this function");
+        _;
+    }
+   
+   function registerAndAssignMaintenanceTask(address _buildingAddress, string memory _taskDescription, address _maintenanceTeam) public onlyFacilityManager {
+        uint taskId;
+        require(_buildingAddress != address(0), "Invalid building address");
+        require(buildingDataRegistry.isBuildingRegistered(_buildingAddress), "Building not registered");
+        require(stakeholderRegistration.isMaintenanceTeamRegistered(_maintenanceTeam), "Invalid maintenance team address");
+        taskId = nextTaskId;
+        maintenanceTasks[nextTaskId] = MaintenanceTask(nextTaskId, _buildingAddress, _taskDescription, _maintenanceTeam, TaskStatus.InProgress);
+        nextTaskId++;
+        
+        emit MaintenanceTaskAssigned(msg.sender, _buildingAddress, taskId, _taskDescription, _maintenanceTeam);
+    }
+    
+    function markTaskAsCompleted(uint256 _taskId) public onlyMaintenanceTeam {
+        
+        require(maintenanceTasks[_taskId].maintenanceTeam == msg.sender, "Only assigned maintenance team can mark task as completed");
+
+        maintenanceTasks[_taskId].status = TaskStatus.Completed;
+        
+        emit TaskCompleted(_taskId, msg.sender);
+    }
+
+}
+
+
+contract InsuranceClaimProcessing {
+    address owner;
+    StakeholderRegistrationContract stakeholderRegistration;
+    BuildingDataRegistry buildingDataRegistry;
+
+    struct InsuranceClaim {
+        uint claimId;
+        address buildingAddress;
+        string insuranceNumber;
+        bytes32 description;
+        bool isApproved;
+    }
+
+    mapping(uint => InsuranceClaim) insuranceClaims;
+    uint nextClaimId;
+
+    event InsuranceClaimSubmitted(address indexed buildingAddress, uint indexed claimId, string insuranceNumber, bytes32 description);
+    event InsuranceClaimProcessed(uint indexed claimId, bool isApproved);
+
+    constructor(address _stakeholderRegistration, address _buildingDataRegistryAddress) {
+        owner = msg.sender;
+        stakeholderRegistration = StakeholderRegistrationContract(_stakeholderRegistration);
+        buildingDataRegistry = BuildingDataRegistry(_buildingDataRegistryAddress);
+        nextClaimId = 1;
+    }
+
+    modifier onlyInsuranceCompany() {
+        require(stakeholderRegistration.isInsuranceCompanyRegistered(msg.sender), "Only registered insurance company can call this function");
+        _;
+    }
+
+    modifier onlyRegisteredMaintenanceTeam() {
+        require(stakeholderRegistration.isMaintenanceTeamRegistered(msg.sender), "Only registered maintenance team can call this function");
+        _;
+    }
+
+    function submitInsuranceClaim(address _buildingAddress, string memory _insuranceNumber, bytes32 _description) public  {
+        uint ClaimId;
+        require(stakeholderRegistration.isBuildingOwnerRegistered(msg.sender) || stakeholderRegistration.isFacilityManagerRegistered(msg.sender), "Unauthorized");
+        require(buildingDataRegistry.isBuildingRegistered(_buildingAddress), "Building not registered");
+        ClaimId = nextClaimId--;
+        insuranceClaims[nextClaimId] = InsuranceClaim(nextClaimId, _buildingAddress, _insuranceNumber, _description, false);
+        emit InsuranceClaimSubmitted(_buildingAddress, ClaimId, _insuranceNumber, _description);
+        nextClaimId++;
+    }
+
+    function provideInsuranceClaimInfo(uint _claimId, bytes32 _insuranceClaimInfo) public onlyRegisteredMaintenanceTeam {
+        InsuranceClaim storage claim = insuranceClaims[_claimId];
+        require(insuranceClaims[_claimId].isApproved == false, "Claim already processed");
+
+        claim.description = _insuranceClaimInfo;
+    }
+
+
+    function processInsuranceClaim(uint _claimId, bool _isApproved) public onlyInsuranceCompany {
+        require(insuranceClaims[_claimId].isApproved == false, "Claim already processed");
+        
+        insuranceClaims[_claimId].isApproved = _isApproved;
+        emit InsuranceClaimProcessed(_claimId, _isApproved);
+    }
+}
+
+contract ReputationRegistry{
+    
+    StakeholderRegistrationContract stakeholderRegistration;
+
+    
+    mapping(address=>uint) MaintenanceTeamRep;
+    address owner;
+    uint cr;
+    uint constant adjusting_factor = 4;
+
+    event ReputationUpdated(address _evaluator, address _maintenanceTeam, uint _reputationScore);
+    
+    struct evaluator_type{
+        mapping(address=>bool) _evaluator;
+        mapping(address=>bool) status;
+    }
+    
+    mapping(address=>evaluator_type) EvaluatorFeedback;
+
+
+    constructor(address _stakeholderRegistration) {
+        owner = msg.sender;
+        stakeholderRegistration = StakeholderRegistrationContract(_stakeholderRegistration);
+    }
+    
+    
+    function addMaintenanceTeam(address s) public {
+        require(stakeholderRegistration.isBuildingOwnerRegistered(msg.sender) || stakeholderRegistration.isFacilityManagerRegistered(msg.sender) || stakeholderRegistration.isInsuranceCompanyRegistered(msg.sender), 
+        "Only building owner, facility manager and insurance company can evaluate the maintenance team");
+        require( MaintenanceTeamRep[s]==0, "Maintenance Team already added");
+        MaintenanceTeamRep[s]=80;
+    }
+    
+    function evaluatorFeedback (address _maintenanceTeam, bool transactionSuccessful) public {
+        require(stakeholderRegistration.isBuildingOwnerRegistered(msg.sender) || stakeholderRegistration.isFacilityManagerRegistered(msg.sender) || stakeholderRegistration.isInsuranceCompanyRegistered(msg.sender), 
+        "Only building owner, facility manager and insurance company can evaluate the maintenance team");
+        require(!EvaluatorFeedback[msg.sender]._evaluator[_maintenanceTeam],
+        "Evaluator (Building Owner or Facility Manager or Insurance Company) has already provided feedback for this Maintenance Team");
+        
+        require(stakeholderRegistration.isMaintenanceTeamRegistered(_maintenanceTeam) ,
+        "Maintenance Team Address is incorrect"
+        );
+        EvaluatorFeedback[msg.sender]._evaluator[_maintenanceTeam]=true;
+        EvaluatorFeedback[msg.sender].status[_maintenanceTeam]= transactionSuccessful;
+        
+    }
+    
+    function calculateRep (address _maintenanceTeam) external {
+        
+        if(EvaluatorFeedback[msg.sender].status[_maintenanceTeam]){
+            cr = ( MaintenanceTeamRep[_maintenanceTeam]*95)/(4*adjusting_factor);
+            cr /= 100;
+             MaintenanceTeamRep[_maintenanceTeam]+=cr;
+        }
+        else{
+            cr = ( MaintenanceTeamRep[_maintenanceTeam]*95)/(4*(10-adjusting_factor));
+            cr /= 100;
+             MaintenanceTeamRep[_maintenanceTeam]-=cr;
+        }
+
+        if ( MaintenanceTeamRep[_maintenanceTeam]<0){
+             MaintenanceTeamRep[_maintenanceTeam]=0;
+        }
+        else if ( MaintenanceTeamRep[_maintenanceTeam]>100){
+             MaintenanceTeamRep[_maintenanceTeam]=100;
+        }
+        
+        emit ReputationUpdated(msg.sender, _maintenanceTeam,  MaintenanceTeamRep[_maintenanceTeam]);
+   }
+}
