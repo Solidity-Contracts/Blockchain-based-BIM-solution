@@ -313,9 +313,6 @@ contract ReputationRegistry{
     function evaluatorFeedback (address _maintenanceTeam, bool transactionSuccessful) public {
         require(stakeholderRegistration.isBuildingOwnerRegistered(msg.sender) || stakeholderRegistration.isFacilityManagerRegistered(msg.sender) || stakeholderRegistration.isInsuranceCompanyRegistered(msg.sender), 
         "Only building owner, facility manager and insurance company can evaluate the maintenance team");
-        require(!EvaluatorFeedback[msg.sender]._evaluator[_maintenanceTeam],
-        "Evaluator (Building Owner or Facility Manager or Insurance Company) has already provided feedback for this Maintenance Team");
-        
         require(stakeholderRegistration.isMaintenanceTeamRegistered(_maintenanceTeam) ,
         "Maintenance Team Address is incorrect"
         );
