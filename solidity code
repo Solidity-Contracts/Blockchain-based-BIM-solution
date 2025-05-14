@@ -262,8 +262,9 @@ contract InsuranceClaimProcessing {
         uint ClaimId;
         require(stakeholderRegistration.isBuildingOwnerRegistered(msg.sender) || stakeholderRegistration.isFacilityManagerRegistered(msg.sender), "Unauthorized");
         require(buildingDataRegistry.isBuildingRegistered(_buildingAddress), "Building not registered");
-        ClaimId = nextClaimId--;
-        insuranceClaims[nextClaimId] = InsuranceClaim(nextClaimId, _buildingAddress, _insuranceNumber, _description, false);
+
+        ClaimId = nextClaimId;
+        insuranceClaims[ClaimId] = InsuranceClaim(ClaimId, _buildingAddress, _insuranceNumber, _description, false);
         emit InsuranceClaimSubmitted(_buildingAddress, ClaimId, _insuranceNumber, _description);
         nextClaimId++;
     }
